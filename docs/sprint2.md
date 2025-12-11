@@ -185,8 +185,10 @@ Mở một terminal mới (Git Bash hoặc CMD), chạy lệnh sau để đưa J
 ```bash
 docker exec -it yagi_spark_master //opt/spark/bin/spark-submit \
   --master spark://spark-master:7077 \
-  --conf spark.jars.ivy=/tmp/.ivy \
-  --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,io.delta:delta-spark_2.12:3.1.0,org.apache.hadoop:hadoop-aws:3.3.4 \
+  --conf spark.jars.ivy=//tmp/.ivy \
+  --conf spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem \
+  --conf spark.hadoop.fs.s3a.path.style.access=true \
+  --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.3,io.delta:delta-spark_2.12:3.1.0,org.apache.hadoop:hadoop-aws:3.3.4 \
   //opt/spark/jobs/spark_ingestion.py
 ```
 *(Lưu ý: Trên Windows Git Bash, ta cần dùng dấu `//` ở đầu đường dẫn để tránh lỗi tự động chuyển đổi đường dẫn).*

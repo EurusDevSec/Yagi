@@ -54,7 +54,7 @@ services:
 
   # --- Processing (Spark) ---
   spark-master:
-    image: apache/spark:latest
+    image: apache/spark:3.5.3
     container_name: yagi_spark_master
     environment:
       - SPARK_NO_DAEMONIZE=true
@@ -67,7 +67,7 @@ services:
     restart: on-failure
 
   spark-worker:
-    image: apache/spark:latest
+    image: apache/spark:3.5.3
     container_name: yagi_spark_worker
     environment:
       - SPARK_NO_DAEMONIZE=true
