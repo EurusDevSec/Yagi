@@ -37,7 +37,7 @@ def run_producer():
         
         # Gửi tin nhắn
         producer.send(KAFKA_TOPIC, record)
-        print(f"Sent: {record['datetime']} - Wind: {record.get('wind_kph', 0)} km/h")
+        print(f"Sent: {record['datetime']} - Wind: {record.get('windspeed', 0)} km/h")
         
         # Giả lập delay (nếu cần chính xác theo timestamp thì code phức tạp hơn, ở đây ta sleep tượng trưng)
         time.sleep(1 / SPEED_FACTOR)

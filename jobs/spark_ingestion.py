@@ -27,16 +27,32 @@ def main():
 
     spark.sparkContext.setLogLevel("WARN")
 
-    # 2. Định nghĩa Schema (Điều chỉnh theo cột trong CSV của bạn)
+    # 2. Định nghĩa Schema (Khớp với cột trong CSV)
     schema = StructType([
+        StructField("name", StringType(), True),
         StructField("datetime", StringType(), True),
-        StructField("temp_c", DoubleType(), True),
-        StructField("wind_kph", DoubleType(), True),
-        StructField("pressure_mb", DoubleType(), True),
-        StructField("precip_mm", DoubleType(), True),
+        StructField("temp", DoubleType(), True),
+        StructField("feelslike", DoubleType(), True),
+        StructField("dew", DoubleType(), True),
         StructField("humidity", DoubleType(), True),
-        StructField("cloud", DoubleType(), True),
-        StructField("condition_text", StringType(), True)
+        StructField("precip", DoubleType(), True),
+        StructField("precipprob", DoubleType(), True),
+        StructField("preciptype", StringType(), True),
+        StructField("snow", DoubleType(), True),
+        StructField("snowdepth", DoubleType(), True),
+        StructField("windgust", DoubleType(), True),
+        StructField("windspeed", DoubleType(), True),
+        StructField("winddir", DoubleType(), True),
+        StructField("sealevelpressure", DoubleType(), True),
+        StructField("cloudcover", DoubleType(), True),
+        StructField("visibility", DoubleType(), True),
+        StructField("solarradiation", DoubleType(), True),
+        StructField("solarenergy", DoubleType(), True),
+        StructField("uvindex", DoubleType(), True),
+        StructField("severerisk", DoubleType(), True),
+        StructField("conditions", StringType(), True),
+        StructField("icon", StringType(), True),
+        StructField("stations", StringType(), True)
     ])
 
     # 3. Đọc dữ liệu từ Kafka
