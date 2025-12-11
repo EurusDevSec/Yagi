@@ -12,16 +12,11 @@ TOPIC = "weather-stream"
 
 def main():
     # 1. Khởi tạo Spark Session
+    # S3A configs are provided via spark-submit command line
     spark = SparkSession.builder \
         .appName("YagiStormIngestion") \
         .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
         .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
-        .config("spark.hadoop.fs.s3a.endpoint", MINIO_ENDPOINT) \
-        .config("spark.hadoop.fs.s3a.access.key", MINIO_ACCESS_KEY) \
-        .config("spark.hadoop.fs.s3a.secret.key", MINIO_SECRET_KEY) \
-        .config("spark.hadoop.fs.s3a.path.style.access", "true") \
-        .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
-        .config("spark.hadoop.fs.s3a.connection.ssl.enabled", "false") \
         .getOrCreate()
 
     spark.sparkContext.setLogLevel("WARN")
