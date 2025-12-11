@@ -1,14 +1,15 @@
 # 📅 Sprint 1 Guide: The Foundation
 **Chủ đề:** Xây Dựng Hạ Tầng Container (Infrastructure Layer)
+**Dự án:** Y.A.G.I (Yielding Adaptive Geo-spatial Intelligence)
 **Trạng thái:** 🚀 Ready to Start
 
 ---
 
 ## 1. Mục Tiêu (Objectives)
-Mục tiêu của Sprint này là xây dựng "bộ khung" vững chắc cho dự án C.H.A.O.S. Kết thúc Sprint 1, bạn cần có một cụm Cluster chạy trên Local (Docker) mượt mà, không ngốn quá nhiều RAM.
+Mục tiêu của Sprint này là xây dựng hạ tầng Big Data tối ưu cho việc tái hiện siêu bão Yagi.
 
 *   ✅ **Services:** Spark (Master/Worker), Kafka (KRaft mode), MinIO, Portainer.
-*   ✅ **Constraint:** Tổng lượng RAM tiêu thụ < 8GB (để chừa chỗ cho OS và trình duyệt).
+*   ✅ **Constraint:** Tổng lượng RAM tiêu thụ < 8GB.
 *   ✅ **Outcome:** Lệnh `docker-compose up -d` kích hoạt thành công tất cả services.
 
 ---
@@ -16,28 +17,27 @@ Mục tiêu của Sprint này là xây dựng "bộ khung" vững chắc cho d�
 ## 2. Chuẩn Bị (Prerequisites)
 
 ### 2.1. Cấu Trúc Thư Mục
-Tạo cấu trúc thư mục dự án như sau:
+Hãy tổ chức lại folder dự án của bạn như sau:
 
 ```bash
-C.H.A.O.S/
-├── data/               # Chứa dữ liệu thô (nếu tải về local)
+Y.A.G.I/ (hoặc C.H.A.O.S)
+├── data/               # Chứa dữ liệu thô (file csv Yagi)
 ├── docker-compose.yaml # File định nghĩa toàn bộ hạ tầng
 ├── jobs/               # Chứa code Spark Job (Ingestion, Processing)
 ├── notebooks/          # Chứa Jupyter Notebooks (Analysis/EDA)
-├── schemas/            # Chứa định nghĩa Schema (nếu cần)
-└── services/           # Chứa code các microservices (API, Dashboard)
+├── schemas/            # Chứa định nghĩa Schema
+└── services/           # Chứa code các microservices (Streamlit, API)
 ```
 
-### 2.2. Công Cụ
-*   Docker Desktop (đã bật Kubernetes hoặc không, tùy chọn - khuyến khích tắt K8s để nhẹ máy).
-*   VS Code.
+### 2.2. Copy Dữ Liệu
+Hãy copy file `Hai phong, Viet Nam 2024-09-05 to 2024-09-09.csv` vào thư mục `data/` trong project.
 
 ---
 
 ## 3. Các Bước Thực Hiện (Implementation Steps)
 
 ### Bước 1: Tạo file `docker-compose.yaml`
-Đây là bước quan trọng nhất. Hãy tạo file `docker-compose.yaml` tại thư mục gốc với nội dung tham khảo sau (đã tối ưu KRaft và Portainer):
+Tạo file `docker-compose.yaml` tại thư mục gốc. Lưu ý bucket mặc định của MinIO là `yagi-data` và Kafka chạy mode KRaft.
 
 ```yaml
 version: '3.8'
@@ -46,7 +46,7 @@ services:
   # --- Visualization & Monitoring ---
   portainer:
     image: portainer/portainer-ce:latest
-    container_name: chaos_portainer
+    container_name: yagi_portainer
     ports:
       - "9000:9000"
     volumes:
@@ -57,7 +57,7 @@ services:
   # --- Message Queue (Kafka KRaft Mode - No Zookeeper) ---
   kafka:
     image: bitnami/kafka:latest
-    container_name: chaos_kafka
+    container_name: yagi_kafka
     ports:
       - "9092:9092"
     environment:
@@ -72,13 +72,13 @@ services:
       - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
     volumes:
       - kafka_data:/bitnami/kafka
-    start_period: 30s  # Đợi ổn định
+    start_period: 30s
     restart: on-failure
 
   # --- Storage (MinIO - Data Lake) ---
   minio:
     image: minio/minio:latest
-    container_name: chaos_minio
+    container_name: yagi_minio
     ports:
       - "9000:9000" # API Port
       - "9001:9001" # Console Port
@@ -97,7 +97,7 @@ services:
   # --- Processing (Spark) ---
   spark-master:
     image: bitnami/spark:latest
-    container_name: chaos_spark_master
+    container_name: yagi_spark_master
     environment:
       - SPARK_MODE=master
       - SPARK_RPC_AUTHENTICATION_ENABLED=no
@@ -108,15 +108,15 @@ services:
       - "8080:8080"
       - "7077:7077"
     volumes:
-      - ./jobs:/opt/bitnami/spark/jobs # Mount code vào container
+      - ./jobs:/opt/bitnami/spark/jobs
 
   spark-worker:
     image: bitnami/spark:latest
-    container_name: chaos_spark_worker
+    container_name: yagi_spark_worker
     environment:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://spark-master:7077
-      - SPARK_WORKER_MEMORY=2G # Giới hạn RAM Worker
+      - SPARK_WORKER_MEMORY=2G # Limit RAM
       - SPARK_WORKER_CORES=2
       - SPARK_RPC_AUTHENTICATION_ENABLED=no
       - SPARK_SSL_ENABLED=no
@@ -125,56 +125,28 @@ services:
     volumes:
       - ./jobs:/opt/bitnami/spark/jobs
 
+  # --- Init Job (Optional: Create Bucket Automatically) ---
+  # Bạn có thể dùng container 'mc' để tạo bucket tự động,
+  # hoặc làm thủ công trong bước Smoke Test.
+
 volumes:
   kafka_data:
   minio_data:
   portainer_data:
 ```
 
-### Bước 2: Start Services & Kiểm Tra Lần Đầu
-Mở terminal tại thư mục dự án và chạy:
-
+### Bước 2: Start Services
+Chạy lệnh:
 ```bash
 docker-compose up -d
 ```
 
-⏳ **Chờ khoảng 1-2 phút** để các service khởi động hoàn toàn.
-
-### Bước 3: Smoke Test (Kiểm tra sống còn)
-Truy cập các địa chỉ sau trên trình duyệt để đảm bảo mọi thứ đã "lên đèn":
-
-1.  **Portainer (Quản lý Container):**
-    *   URL: `http://localhost:9000`
-    *   Hành động: Tạo tài khoản admin lần đầu. Chọn môi trường "Local". Kiểm tra xem có 5 container đang chạy (green state) không.
-2.  **MinIO (Data Lake):**
-    *   URL: `http://localhost:9001`
+### Bước 3: Smoke Test & Setup Bucket
+1.  **Portainer (localhost:9000):** Kiểm tra xem cả 5 container (kafka, minio, spark-master, spark-worker, portainer) có xanh không.
+2.  **MinIO (localhost:9001):**
     *   Login: `admin` / `password123`.
-    *   Hành động: Thử tạo một Bucket tên là `climate-data`.
-3.  **Spark Master:**
-    *   URL: `http://localhost:8080`
-    *   Hành động: Kiểm tra xem có 1 Worker đang status `ALIVE` không.
+    *   **QUAN TRỌNG:** Vào menu **Buckets** -> Create Bucket -> Đặt tên: `yagi-data` (Đây là nơi chứa dữ liệu bão).
+3.  **Spark (localhost:8080):** Đảm bảo Worker đang Alive.
 
-### Bước 4: Clean Up (Optional)
-Nếu muốn tắt hệ thống để nghỉ ngơi:
-```bash
-docker-compose down
-# Hoặc gỡ bỏ cả volumes (xóa sạch dữ liệu)
-docker-compose down -v
-```
-
----
-
-## 4. Troubleshooting (Gỡ Rối)
-
-*   **Lỗi: Port already in use**:
-    *   Nguyên nhân: Có service khác (như IIS, Skype, hoặc project cũ) đang chiếm port 8080 hoặc 9000.
-    *   Khắc phục: Đổi port mapping trong `docker-compose.yaml`. Ví dụ đổi Spark UI thành `8081:8080`.
-*   **Lỗi: Kafka Crashed (Exited 1)**:
-    *   Nguyên nhân: Thường do thiếu ID node.
-    *   Khắc phục: Đảm bảo biến `KAFKA_CFG_NODE_ID` đã được set. Nếu vẫn lỗi, thử xóa volume `docker-compose down -v` và chạy lại.
-*   **Máy quá lag**:
-    *   Khắc phục: Giảm `SPARK_WORKER_MEMORY` xuống `1G` hoặc tắt bớt trình duyệt Chrome.
-
----
-
-🚀 **Chúc bạn hoàn thành Sprint 1 tốt đẹp!**
+### Bước 4: Validation
+Docker Cluster của bạn đã sẵn sàng tiếp nhận dữ liệu báo bão trong Sprint 2!
