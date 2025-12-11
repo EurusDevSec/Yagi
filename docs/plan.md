@@ -24,7 +24,7 @@
 
 * **Ingestion Layer:**
     * *Source:* Dữ liệu lịch sử Kaggle (Hourly Weather Data) giả lập luồng Real-time (Data Replay).
-    * *Message Queue:* **Apache Kafka** (Image: `bitnami/kafka`).
+    * *Message Queue:* **Apache Kafka** (Image: `bitnami/kafka`, KRaft Mode - No Zookeeper).
 * **Storage Layer (Data Lakehouse):**
     * [cite_start]*Object Storage:* **MinIO** (Giả lập S3)[cite: 15].
     * [cite_start]*Table Format:* **Delta Lake** (Hỗ trợ ACID & Time-travel)[cite: 7, 15].
@@ -38,6 +38,7 @@
     * *Alerting:* Telegram Bot (Optional).
 * **Infrastructure:**
     * **Docker Compose** để quản lý toàn bộ service.
+    * **Monitoring:** **Portainer** (Container Management UI).
 
 ---
 
@@ -48,7 +49,8 @@
 * **Công việc cụ thể:**
     1.  Cài đặt môi trường: Docker Desktop, Python 3.9+, Java (nếu cần debug).
     2.  Thiết kế file `docker-compose.yaml`:
-        * Cấu hình **Kafka & Zookeeper**: Tối ưu heap size.
+        * Cấu hình **Kafka (KRaft Mode)**: Loại bỏ Zookeeper giúp tiết kiệm ~500MB-1GB RAM.
+        * Cấu hình **Portainer**: Thêm container Portainer để monitoring trực quan.
         * Cấu hình **MinIO**: Thiết lập Access Key/Secret Key, tạo sẵn Bucket `climate-data`.
         * Cấu hình **Spark Master & Worker**: Giới hạn Worker RAM tối đa 4GB.
     3.  Kiểm thử (Smoke Test):
@@ -93,14 +95,16 @@
         * Cấu hình Docker `restart: always`.
         * Viết script `chaos_monkey.py`: Random kill container `prediction_service`.
     3.  Tổng diễn tập Demo:
-        * Bật hệ thống -> Chạy Data Replay -> Show Dashboard -> Kill service -> Hệ thống tự sống lại.
+        * Bật hệ thống -> Chạy Data Replay -> Show Dashboard.
+        * Mở **Portainer**: Quan sát trạng thái container.
+        * Kill service (Chaos Monkey) -> Xem trên Portainer thấy container tự restart (Self-healing).
 
 ---
 
 ### 5. Tech Stack Chốt Hạ (Tối ưu 16GB RAM)
 * **Language:** Python (PySpark, Streamlit).
-* **Big Data:** Apache Spark 3.x, Apache Kafka 3.x.
+* **Big Data:** Apache Spark 3.x, Apache Kafka 3.x (KRaft Mode).
 * **Storage:** MinIO, Delta Lake 2.x.
-* **DevOps:** Docker, Docker Compose.
+* **DevOps:** Docker, Docker Compose, Portainer.
 * **Cloud:** Google Colab (cho Training).
 
