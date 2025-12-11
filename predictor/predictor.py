@@ -64,7 +64,7 @@ def main():
         bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
         value_deserializer=lambda m: json.loads(m.decode('utf-8')),
         auto_offset_reset='earliest',
-        group_id='predictor-group'
+        group_id='predictor-group-v2'
     )
     
     # Kafka Producer (for alerts)
