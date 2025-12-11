@@ -183,12 +183,13 @@ if __name__ == "__main__":
 Mở một terminal mới (Git Bash hoặc CMD), chạy lệnh sau để đưa Job vào Spark Master:
 
 ```bash
-docker exec -it yagi_spark_master /opt/spark/bin/spark-submit \
+docker exec -it yagi_spark_master //opt/spark/bin/spark-submit \
   --master spark://spark-master:7077 \
+  --conf spark.jars.ivy=/tmp/.ivy \
   --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,io.delta:delta-spark_2.12:3.1.0,org.apache.hadoop:hadoop-aws:3.3.4 \
-  /opt/spark/jobs/spark_ingestion.py
+  //opt/spark/jobs/spark_ingestion.py
 ```
-*Lưu ý: Lần đầu chạy sẽ mất chút thời gian tải thư viện Maven.*
+*(Lưu ý: Trên Windows Git Bash, ta cần dùng dấu `//` ở đầu đường dẫn để tránh lỗi tự động chuyển đổi đường dẫn).*
 
 ### Bước 5.2: Chạy Producer (Trên Local)
 Mở một terminal khác (tại folder dự án), chạy file Python để bắt đầu bắn dữ liệu:
