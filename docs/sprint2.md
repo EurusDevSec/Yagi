@@ -3,25 +3,32 @@
 
 ---
 
-## 1. Cập nhật Hạ Tầng (Networking Fix)
-Để Producer (chạy ở Local) và Spark (chạy trong Docker) đều kết nối được với Kafka, ta cần mở thêm cổng kết nối.
+## ⚠️ Lưu Ý Quan Trọng
 
-### Bước 1.1: Sửa file `docker-compose.yaml`
-Cập nhật service `kafka` như sau:
+> **AWS SDK không chấp nhận hostname có dấu gạch dưới (`_`).**
+> 
+> Tất cả tên container **PHẢI** dùng dấu gạch ngang (`-`) thay vì gạch dưới.
+> - ✅ `yagi-kafka`, `yagi-minio`, `yagi-spark-master`
+> - ❌ `yagi_kafka`, `yagi_minio`, `yagi_spark_master`
 
+---
+
+## 1. Cấu Hình Docker Compose
+
+### File `docker-compose.yaml` (Phần Kafka)
 ```yaml
   kafka:
     image: apache/kafka:latest
-    container_name: yagi_kafka
+    container_name: yagi-kafka  # Dùng dấu gạch ngang!
     ports:
-      - "9092:9092" # Internal (Spark -> Kafka) - Thực ra port này dùng trong Docker network
-      - "9094:9094" # External (Local Producer -> Kafka) - MỚI
+      - "9092:9092" # Internal (Spark -> Kafka)
+      - "9094:9094" # External (Local Producer -> Kafka)
     environment:
       - KAFKA_NODE_ID=0
       - KAFKA_PROCESS_ROLES=controller,broker
-      - KAFKA_CONTROLLER_QUORUM_VOTERS=0@yagi_kafka:9093
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
       - KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
-      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://yagi_kafka:9092,EXTERNAL://localhost:9094
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://yagi-kafka:9092,EXTERNAL://localhost:9094
       - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
       - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
       - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
@@ -31,11 +38,12 @@ Cập nhật service `kafka` như sau:
 ```
 
 *Giải thích:*
-*   `PLAINTEXT (9092)`: Dành cho các container bên trong (Spark) gọi tới `yagi_kafka:9092`.
+*   `PLAINTEXT (9092)`: Dành cho các container bên trong (Spark) gọi tới `yagi-kafka:9092`.
 *   `EXTERNAL (9094)`: Dành cho máy tính của bạn (Producer) gọi tới `localhost:9094`.
 
-### Bước 1.2: Apply thay đổi
+### Apply thay đổi
 ```bash
+docker-compose down
 docker-compose up -d
 ```
 
@@ -50,12 +58,26 @@ pip install pandas kafka-python
 
 ---
 
-## 3. Implement Producer (Python)
-Tạo file `jobs/yagi_producer.py`. Script này đọc file CSV và bắn vào Kafka từng dòng một.
+## 3. Tạo Bucket MinIO
 
-**Lưu ý:** Đổi tên file dữ liệu trong thư mục `data/` thành `yagi_storm.csv` cho dễ gọi, hoặc sửa đường dẫn trong code.
+Trước khi chạy Spark job, phải tạo bucket `yagi-data` trong MinIO:
+
+1. Mở trình duyệt vào `http://localhost:9001`
+2. Đăng nhập: `admin` / `password123`
+3. Tạo bucket mới có tên `yagi-data`
+
+Hoặc dùng CLI:
+```bash
+docker exec yagi-minio mc alias set myminio http://localhost:9000 admin password123
+docker exec yagi-minio mc mb myminio/yagi-data
+```
+
+---
+
+## 4. File Producer: `jobs/yagi_producer.py`
 
 ```python
+import os
 import time
 import json
 import pandas as pd
@@ -63,37 +85,28 @@ from kafka import KafkaProducer
 
 # Cấu hình
 KAFKA_TOPIC = "weather-stream"
-KAFKA_BOOTSTRAP_SERVERS = "localhost:9094" # Port External
-DATA_PATH = "../data/yagi_storm.csv" # Đường dẫn tới file CSV
-SPEED_FACTOR = 1 # 1 = Real-time, 10 = Nhanh gấp 10 lần
+KAFKA_BOOTSTRAP_SERVERS = "localhost:9094"  # Port External 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_PATH = os.path.join(SCRIPT_DIR, "../data/yagi_storm.csv")
 
 def json_serializer(data):
     return json.dumps(data).encode("utf-8")
 
 def run_producer():
-    # 1. Khởi tạo Producer
     producer = KafkaProducer(
         bootstrap_servers=[KAFKA_BOOTSTRAP_SERVERS],
         value_serializer=json_serializer
     )
     
-    # 2. Đọc dữ liệu
     print(f"Reading data from {DATA_PATH}...")
     df = pd.read_csv(DATA_PATH)
-    # Lọc các cột cần thiết nếu cần (datetime, wind_kph, pressure_mb, ...)
-    # df = df[['datetime', 'wind_kph', 'pressure_mb', 'precip_mm', 'humidity']]
     
     print(f"Start sending {len(df)} records to Kafka topic '{KAFKA_TOPIC}'...")
     
     for index, row in df.iterrows():
         record = row.to_dict()
-        
-        # Gửi tin nhắn
         producer.send(KAFKA_TOPIC, record)
         print(f"Sent: {record['datetime']} - Wind: {record.get('wind_kph', 0)} km/h")
-        
-        # Giả lập delay (nếu cần chính xác theo timestamp thì code phức tạp hơn, ở đây ta sleep tượng trưng)
-        time.sleep(1 / SPEED_FACTOR)
         
     producer.flush()
     print("Done!")
@@ -104,23 +117,23 @@ if __name__ == "__main__":
 
 ---
 
-## 4. Implement Spark Job (Ingestion)
-Tạo file `jobs/spark_ingestion.py`. Đây là trái tim của Pipeline, chạy bên trong container Spark.
+## 5. File Spark Ingestion: `jobs/spark_ingestion.py`
 
 ```python
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, col
-from pyspark.sql.types import StructType, StructField, StringType, DoubleType, TimestampType
+from pyspark.sql.types import StructType, StructField, StringType, DoubleType
 
-# Cấu hình MinIO & Kafka
+
 MINIO_ACCESS_KEY = "admin"
 MINIO_SECRET_KEY = "password123"
-MINIO_ENDPOINT = "http://yagi_minio:9000"
-KAFKA_BOOTSTRAP_SERVERS = "yagi_kafka:9092" # Port Internal
+MINIO_ENDPOINT = "http://yagi-minio:9000"  # Dùng dấu gạch ngang!
+KAFKA_BOOTSTRAP_SERVERS = "yagi-kafka:9092"  # Dùng dấu gạch ngang!
 TOPIC = "weather-stream"
 
+
 def main():
-    # 1. Khởi tạo Spark Session với Delta & S3 Support
+    # 1. Khởi tạo Spark Session với cấu hình S3A cho MinIO
     spark = SparkSession.builder \
         .appName("YagiStormIngestion") \
         .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
@@ -131,11 +144,12 @@ def main():
         .config("spark.hadoop.fs.s3a.path.style.access", "true") \
         .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
         .config("spark.hadoop.fs.s3a.connection.ssl.enabled", "false") \
+        .config("spark.hadoop.fs.s3a.endpoint.region", "us-east-1") \
         .getOrCreate()
 
     spark.sparkContext.setLogLevel("WARN")
 
-    # 2. Định nghĩa Schema (Điều chỉnh theo cột trong CSV của bạn)
+    # 2. Định nghĩa Schema
     schema = StructType([
         StructField("datetime", StringType(), True),
         StructField("temp_c", DoubleType(), True),
@@ -175,31 +189,75 @@ if __name__ == "__main__":
     main()
 ```
 
+**Cấu hình quan trọng:**
+- `spark.hadoop.fs.s3a.endpoint.region=us-east-1` - **BẮT BUỘC!** AWS SDK cần config này dù MinIO không quan tâm region.
+
 ---
 
-## 5. Thực Thi Pipeline
+## 6. Thực Thi Pipeline
 
-### Bước 5.1: Submit Job Spark (Trong Container)
-Mở một terminal mới (Git Bash hoặc CMD), chạy lệnh sau để đưa Job vào Spark Master:
+### 🔹 Bước 1: Chạy Producer TRƯỚC (tạo Kafka topic)
 
 ```bash
-docker exec -it yagi_spark_master //opt/spark/bin/spark-submit \
+python jobs/yagi_producer.py
+```
+
+Đợi cho đến khi thấy `Done!`.
+
+### 🔹 Bước 2: Submit Spark Job
+
+**Cách 1: Chạy từ TRONG container (khuyên dùng)**
+
+```bash
+# Vào container
+docker exec -it yagi-spark-master bash
+
+# Chạy spark-submit
+/opt/spark/bin/spark-submit \
+  --master spark://spark-master:7077 \
+  --conf spark.jars.ivy=/tmp/.ivy \
+  --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.3,io.delta:delta-spark_2.12:3.1.0,org.apache.hadoop:hadoop-aws:3.3.4 \
+  /opt/spark/jobs/spark_ingestion.py
+```
+
+**Cách 2: Chạy từ Git Bash (Windows)**
+
+```bash
+docker exec -it yagi-spark-master //opt/spark/bin/spark-submit \
   --master spark://spark-master:7077 \
   --conf spark.jars.ivy=//tmp/.ivy \
   --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.3,io.delta:delta-spark_2.12:3.1.0,org.apache.hadoop:hadoop-aws:3.3.4 \
   //opt/spark/jobs/spark_ingestion.py
 ```
-*(Lưu ý: Trên Windows Git Bash, ta cần dùng dấu `//` ở đầu đường dẫn để tránh lỗi tự động chuyển đổi đường dẫn).*
 
-### Bước 5.2: Chạy Producer (Trên Local)
-Mở một terminal khác (tại folder dự án), chạy file Python để bắt đầu bắn dữ liệu:
+*(Lưu ý: Dùng `//` ở đầu path để tránh Git Bash tự chuyển đổi đường dẫn)*
 
-```bash
-cd jobs
-python yagi_producer.py
-```
+### 🔹 Bước 3: Kiểm Tra Kết Quả
 
-### Bước 5.3: Kiểm Tra Kết Quả
-1.  Nhìn vào log của Producer, bạn sẽ thấy nó đang gửi từng dòng `Sent: ...`.
-2.  Mở trình duyệt vào MinIO `localhost:9001` (login `admin` / `password123`).
-3.  Vào bucket `yagi-data`, kiểm tra folder `bronze/weather`. Nếu thấy các file `.parquet` xuất hiện là thành công! 🎉
+1. Xem log Spark - phải thấy: `Spark Streaming is running... Data is flowing to MinIO.`
+2. Mở MinIO Console: `http://localhost:9001` (login: `admin` / `password123`)
+3. Vào bucket `yagi-data` → thư mục `bronze/weather` → thấy các file `.parquet` là **THÀNH CÔNG!** 🎉
+
+---
+
+## 7. Troubleshooting
+
+| Lỗi | Nguyên nhân | Cách fix |
+|-----|-------------|----------|
+| `hostname cannot be null` | Hostname có dấu gạch dưới `_` | Đổi tất cả `yagi_*` thành `yagi-*` trong docker-compose.yaml |
+| `UnknownTopicOrPartitionException` | Kafka topic chưa tồn tại | Chạy Producer trước để tạo topic |
+| `NumberFormatException: "60s"` | Spark version không tương thích | Dùng `apache/spark:3.5.3` |
+| `ClassNotFoundException: scala.collection...` | Sai Scala version trong packages | Dùng `_2.12` cho Spark 3.5.x |
+
+---
+
+## 8. Phiên Bản Đã Test Thành Công
+
+| Component | Version |
+|-----------|---------|
+| Spark | `apache/spark:3.5.3` |
+| Kafka | `apache/kafka:latest` |
+| MinIO | `minio/minio:latest` |
+| Delta Lake | `delta-spark_2.12:3.1.0` |
+| Hadoop AWS | `hadoop-aws:3.3.4` |
+| Scala | `2.12` |

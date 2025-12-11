@@ -5,8 +5,8 @@ from pyspark.sql.types import StructType, StructField, StringType, DoubleType, T
 
 MINIO_ACCESS_KEY = "admin"
 MINIO_SECRET_KEY = "password123"
-MINIO_ENDPOINT = "http://yagi_minio:9000"
-KAFKA_BOOTSTRAP_SERVERS = "yagi_kafka:9092" # Port Internal
+MINIO_ENDPOINT = "http://yagi-minio:9000"
+KAFKA_BOOTSTRAP_SERVERS = "yagi-kafka:9092" # Port Internal
 TOPIC = "weather-stream"
 
 
@@ -22,7 +22,7 @@ def main():
         .config("spark.hadoop.fs.s3a.path.style.access", "true") \
         .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
         .config("spark.hadoop.fs.s3a.connection.ssl.enabled", "false") \
-        .config("spark.hadoop.fs.s3a.impl.disable.cache", "true") \
+        .config("spark.hadoop.fs.s3a.endpoint.region", "us-east-1") \
         .getOrCreate()
 
     spark.sparkContext.setLogLevel("WARN")
