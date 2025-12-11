@@ -1,3 +1,3 @@
 # Yagi
 
-![alt text](chaos.jpg)
+![alt text](yagi.jpg)
