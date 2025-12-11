@@ -6,7 +6,7 @@ services:
     image: portainer/portainer-ce:latest
     container_name: yagi_portainer
     ports:
-      - "9000:9000"
+      - "9002:9000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
@@ -30,7 +30,7 @@ services:
       - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
     volumes:
       - kafka_data:/bitnami/kafka
-    start_period: 30s
+
     restart: on-failure   
 
   # --- Storage (MinIO - Data Lake) ---
@@ -85,3 +85,8 @@ services:
     volumes:
       - ./jobs:/opt/bitnami/spark/jobs
     restart: on-failure
+
+volumes:
+  portainer_data:
+  kafka_data:
+  minio_data:
