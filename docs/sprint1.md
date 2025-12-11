@@ -20,7 +20,7 @@ Mục tiêu của Sprint này là xây dựng hạ tầng Big Data tối ưu cho
 Hãy tổ chức lại folder dự án của bạn như sau:
 
 ```bash
-Y.A.G.I/ (hoặc C.H.A.O.S)
+Yagi/
 ├── data/               # Chứa dữ liệu thô (file csv Yagi)
 ├── docker-compose.yaml # File định nghĩa toàn bộ hạ tầng
 ├── jobs/               # Chứa code Spark Job (Ingestion, Processing)
