@@ -1,12 +1,16 @@
-import time 
+import time
 import json
+import os
 import pandas as pd
 from kafka import KafkaProducer
 
-
+# Cấu hình
 KAFKA_TOPIC = "weather-stream"
 KAFKA_BOOTSTRAP_SERVERS = "localhost:9094" # Port External
-DATA_PATH = "../data/yagi_storm.csv" # Đường dẫn tới file CSV
+
+# Use a path relative to THIS script file
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_PATH = os.path.join(BASE_DIR, "../data/yagi_storm.csv")
 SPEED_FACTOR = 1 # 1 = Real-time, 10 = Nhanh gấp 10 lần
 
 
