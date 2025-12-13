@@ -53,7 +53,7 @@ def rule_based_predict(record):
     return 0
 
 def main():
-    print("🚀 Storm Predictor Service Starting...")
+    print("🚀 Storm Predictor Service Starting...", flush=True)
     
     # Load model
     model = load_model()
@@ -64,7 +64,7 @@ def main():
         bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
         value_deserializer=lambda m: json.loads(m.decode('utf-8')),
         auto_offset_reset='earliest',
-        group_id='predictor-group-v2'
+        group_id='predictor-group-v3'
     )
     
     # Kafka Producer (for alerts)
@@ -73,8 +73,8 @@ def main():
         value_serializer=lambda v: json.dumps(v).encode('utf-8')
     )
     
-    print(f"📡 Listening to topic: {INPUT_TOPIC}")
-    print(f"📢 Alerts will be sent to: {ALERT_TOPIC}")
+    print(f"📡 Listening to topic: {INPUT_TOPIC}", flush=True)
+    print(f"📢 Alerts will be sent to: {ALERT_TOPIC}", flush=True)
     
     for message in consumer:
         record = message.value
@@ -104,7 +104,7 @@ def main():
             
             # Log
             status = "⚠️ DANGEROUS" if prediction == 1 else "✅ Safe"
-            print(f"{record.get('datetime')} | Wind: {record.get('windspeed', 0):>6} km/h | {status}")
+            print(f"{record.get('datetime')} | Wind: {record.get('windspeed', 0):>6} km/h | {status}", flush=True)
             
         except Exception as e:
             print(f"❌ Error processing: {e}")
