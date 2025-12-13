@@ -58,8 +58,8 @@ def init_consumer():
             TOPIC_WEATHER,
             bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
             value_deserializer=lambda m: json.loads(m.decode('utf-8')),
-            auto_offset_reset='latest',
-            group_id='dashboard-group-v2', # Đổi group ID mới
+            auto_offset_reset='earliest', # Đổi thành earliest để đọc dữ liệu cũ nếu chưa có mới
+            group_id='dashboard-group-v3', # Đổi group ID mới
             consumer_timeout_ms=1000
         )
         return consumer
