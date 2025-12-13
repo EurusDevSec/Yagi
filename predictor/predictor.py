@@ -2,7 +2,7 @@ import json
 import time
 import joblib
 import numpy as np
-from kafka import KafkaConsumer, KafkaProducer
+from kafka import KafkaConsumer, KafkaProducer, TopicPartition
 
 # Cấu hình
 KAFKA_BOOTSTRAP_SERVERS = "yagi-kafka:9092"
@@ -67,7 +67,7 @@ def main():
                 bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
                 value_deserializer=lambda m: json.loads(m.decode('utf-8')),
                 auto_offset_reset='earliest',
-                group_id='predictor-group-v5'
+                group_id='predictor-group-v6'
             )
             print("✅ Connected to Kafka Consumer", flush=True)
         except Exception as e:
@@ -100,45 +100,71 @@ def main():
 
     print(f"📢 Alerts will be sent to: {ALERT_TOPIC}", flush=True)
     
-    for message in consumer:
-        # Debug print for every message received
-        # print(f"📥 Received message at offset {message.offset}", flush=True)
-        
-        record = message.value
-        
-        try:
-            if model is not None:
-                # ML-based prediction (dùng đúng tên cột từ CSV)
-                features = np.array([[
-                    record.get('temp', 0) or 0,
-                    record.get('sealevelpressure', 1013) or 1013,
-                    record.get('humidity', 50) or 50,
-                    record.get('cloudcover', 0) or 0,
-                    record.get('precip', 0) or 0,
-                    record.get('windgust', 0) or 0
-                ]])
-                prediction = model.predict(features)[0]
-                proba = model.predict_proba(features)[0]
-                confidence = max(proba)
-            else:
-                # Rule-based fallback
-                prediction = rule_based_predict(record)
-                confidence = None
-            
-            # Tạo và gửi alert
-            alert = create_alert(record, prediction, confidence)
-            producer.send(ALERT_TOPIC, alert)
-            
-            # Log
-            status = "⚠️ DANGEROUS" if prediction == 1 else "✅ Safe"
-            print(f"{record.get('datetime')} | Wind: {record.get('windspeed', 0):>6} km/h | {status}", flush=True)
-            
-        except Exception as e:
-            print(f"❌ Error processing: {e}")
-            continue
+    # Manual Partition Assignment (Bypass Group Rebalance issues)
+    partitions = None
+    while not partitions:
+        partitions = consumer.partitions_for_topic(INPUT_TOPIC)
+        if not partitions:
+            print(f"⏳ Waiting for partitions for topic {INPUT_TOPIC}...", flush=True)
+            time.sleep(2)
     
-    consumer.close()
-    producer.close()
+    topic_partitions = [TopicPartition(INPUT_TOPIC, p) for p in partitions]
+    consumer.assign(topic_partitions)
+    print(f"✅ Manually assigned to partitions: {topic_partitions}", flush=True)
+    
+    # Force read from beginning
+    consumer.seek_to_beginning()
+    
+    # Poll loop
+    try:
+        while True:
+            # Poll for messages
+            msg_pack = consumer.poll(timeout_ms=1000)
+            
+            if not msg_pack:
+                continue
+            
+            for tp, messages in msg_pack.items():
+                for message in messages:
+                    print(f"📥 Received message: {message.value.get('datetime')}", flush=True)
+                    record = message.value
+                    
+                    try:
+                        if model is not None:
+                            # ML-based prediction (dùng đúng tên cột từ CSV)
+                            features = np.array([[
+                                record.get('temp', 0) or 0,
+                                record.get('sealevelpressure', 1013) or 1013,
+                                record.get('humidity', 50) or 50,
+                                record.get('cloudcover', 0) or 0,
+                                record.get('precip', 0) or 0,
+                                record.get('windgust', 0) or 0
+                            ]])
+                            prediction = model.predict(features)[0]
+                            proba = model.predict_proba(features)[0]
+                            confidence = max(proba)
+                        else:
+                            # Rule-based fallback
+                            prediction = rule_based_predict(record)
+                            confidence = None
+                        
+                        # Tạo và gửi alert
+                        alert = create_alert(record, prediction, confidence)
+                        producer.send(ALERT_TOPIC, alert)
+                        
+                        # Log
+                        status = "⚠️ DANGEROUS" if prediction == 1 else "✅ Safe"
+                        print(f"{record.get('datetime')} | Wind: {record.get('windspeed', 0):>6} km/h | {status}", flush=True)
+                        
+                    except Exception as e:
+                        print(f"❌ Error processing: {e}", flush=True)
+                        continue
+
+    except KeyboardInterrupt:
+        print("🛑 Stopping...", flush=True)
+    finally:
+        consumer.close()
+        producer.close()
 
 if __name__ == "__main__":
     main()
