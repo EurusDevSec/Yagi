@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import json
-from kafka import KafkaConsumer
+from kafka import KafkaConsumer, TopicPartition
 import time
 
 # Cấu hình trang
@@ -45,7 +45,6 @@ alert_log = st.empty()
 
 # Khởi tạo session state
 if 'data' not in st.session_state:
-    # Khởi tạo DataFrame với đúng kiểu dữ liệu để tránh warning
     st.session_state.data = pd.DataFrame({
         'timestamp': pd.Series(dtype='str'),
         'windspeed': pd.Series(dtype='float'),
@@ -54,12 +53,11 @@ if 'data' not in st.session_state:
 
 def init_consumer():
     try:
+        # Khởi tạo consumer KHÔNG subscribe topic ngay (để assign thủ công)
         consumer = KafkaConsumer(
-            TOPIC_WEATHER,
             bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
             value_deserializer=lambda m: json.loads(m.decode('utf-8')),
-            auto_offset_reset='earliest', # Đổi thành earliest để đọc dữ liệu cũ nếu chưa có mới
-            group_id='dashboard-group-v3', # Đổi group ID mới
+            # Không cần group_id hay auto_offset_reset khi dùng assign thủ công
             consumer_timeout_ms=1000
         )
         return consumer
@@ -72,7 +70,25 @@ if st.button('Bắt đầu giám sát'):
     consumer = init_consumer()
     
     if consumer:
-        st.success("Đã kết nối Kafka! Đang chờ dữ liệu...")
+        st.success("Đã kết nối Kafka! Đang thiết lập phân vùng...")
+        
+        # --- MANUAL ASSIGNMENT (FIX LỖI TREO) ---
+        # 1. Lấy danh sách partition của topic
+        partitions = None
+        while not partitions:
+            partitions = consumer.partitions_for_topic(TOPIC_WEATHER)
+            if not partitions:
+                st.warning(f"Đang tìm topic {TOPIC_WEATHER}...")
+                time.sleep(1)
+        
+        # 2. Gán thủ công (Assign)
+        topic_partitions = [TopicPartition(TOPIC_WEATHER, p) for p in partitions]
+        consumer.assign(topic_partitions)
+        
+        # 3. Ép đọc từ đầu (Seek to beginning)
+        consumer.seek_to_beginning()
+        
+        st.info(f"Đã gán {len(topic_partitions)} phân vùng. Bắt đầu nhận dữ liệu...")
         
         # Vòng lặp chính
         while True:
@@ -107,12 +123,12 @@ if st.button('Bắt đầu giám sát'):
                 else:
                     metric_status.success("✅ AN TOÀN")
 
-                # Vẽ lại biểu đồ (Dùng placeholder để replace chart cũ)
+                # Vẽ lại biểu đồ
                 with chart_wind_placeholder.container():
                     st.line_chart(st.session_state.data.set_index('timestamp')['windspeed'], height=300)
                 
                 with chart_pressure_placeholder.container():
                     st.line_chart(st.session_state.data.set_index('timestamp')['pressure'], height=300)
             
-            # Sleep nhẹ để giảm tải CPU nếu không có tin nhắn
+            # Sleep nhẹ
             time.sleep(0.1)
