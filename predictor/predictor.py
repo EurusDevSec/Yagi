@@ -67,7 +67,7 @@ def main():
                 bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
                 value_deserializer=lambda m: json.loads(m.decode('utf-8')),
                 auto_offset_reset='earliest',
-                group_id='predictor-group-v4'
+                group_id='predictor-group-v5'
             )
             print("✅ Connected to Kafka Consumer", flush=True)
         except Exception as e:
@@ -88,9 +88,22 @@ def main():
             time.sleep(5)
     
     print(f"📡 Listening to topic: {INPUT_TOPIC}", flush=True)
+    
+    # Debug: Check topics
+    try:
+        topics = consumer.topics()
+        print(f"📋 Available topics: {topics}", flush=True)
+        if INPUT_TOPIC not in topics:
+            print(f"⚠️ Warning: Topic '{INPUT_TOPIC}' not found in available topics!", flush=True)
+    except Exception as e:
+        print(f"⚠️ Error fetching topics: {e}", flush=True)
+
     print(f"📢 Alerts will be sent to: {ALERT_TOPIC}", flush=True)
     
     for message in consumer:
+        # Debug print for every message received
+        # print(f"📥 Received message at offset {message.offset}", flush=True)
+        
         record = message.value
         
         try:
