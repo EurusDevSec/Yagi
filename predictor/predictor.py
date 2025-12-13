@@ -59,19 +59,33 @@ def main():
     model = load_model()
     
     # Kafka Consumer
-    consumer = KafkaConsumer(
-        INPUT_TOPIC,
-        bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
-        value_deserializer=lambda m: json.loads(m.decode('utf-8')),
-        auto_offset_reset='earliest',
-        group_id='predictor-group-v3'
-    )
+    consumer = None
+    while consumer is None:
+        try:
+            consumer = KafkaConsumer(
+                INPUT_TOPIC,
+                bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+                value_deserializer=lambda m: json.loads(m.decode('utf-8')),
+                auto_offset_reset='earliest',
+                group_id='predictor-group-v4'
+            )
+            print("✅ Connected to Kafka Consumer", flush=True)
+        except Exception as e:
+            print(f"⚠️ Failed to connect to Kafka Consumer: {e}. Retrying in 5s...", flush=True)
+            time.sleep(5)
     
     # Kafka Producer (for alerts)
-    producer = KafkaProducer(
-        bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
-        value_serializer=lambda v: json.dumps(v).encode('utf-8')
-    )
+    producer = None
+    while producer is None:
+        try:
+            producer = KafkaProducer(
+                bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+                value_serializer=lambda v: json.dumps(v).encode('utf-8')
+            )
+            print("✅ Connected to Kafka Producer", flush=True)
+        except Exception as e:
+            print(f"⚠️ Failed to connect to Kafka Producer: {e}. Retrying in 5s...", flush=True)
+            time.sleep(5)
     
     print(f"📡 Listening to topic: {INPUT_TOPIC}", flush=True)
     print(f"📢 Alerts will be sent to: {ALERT_TOPIC}", flush=True)
