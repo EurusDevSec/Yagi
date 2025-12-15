@@ -41,7 +41,7 @@ def run_producer():
         
         # Giả lập delay (nếu cần chính xác theo timestamp thì code phức tạp hơn, ở đây ta sleep tượng trưng)
         time.sleep(1 / SPEED_FACTOR)
-        
+        # xoa bo nho tranh lang phi tai nguyen
     producer.flush()
     print("Done!")
 
